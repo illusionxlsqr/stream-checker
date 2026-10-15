@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Stream Checker</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #111; color: #eee; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; color: #e50914; }
+        .services { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; justify-content: center; }
+        .service-btn { padding: 12px 20px; border: none; background: #222; color: #fff; cursor: pointer; border-radius: 6px; }
+        .service-btn.active { background: #e50914; }
+        textarea { width: 100%; height: 180px; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 10px; font-family: monospace; }
+        button#check { width: 100%; padding: 14px; background: #e50914; color: #fff; border: none; font-size: 16px; cursor: pointer; margin: 10px 0; }
+        .results { margin-top: 30px; }
+        .col { display: inline-block; width: 48%; vertical-align: top; margin: 1%; }
+        .working { color: #0f0; }
+        .dead { color: #f55; }
+        .error { color: #fa0; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 4px 0; border-bottom: 1px solid #333; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Stream Checker</h1>
+    <div class="services" id="services"></div>
+    <textarea id="combos" placeholder="email:password&#10;uno per riga&#10;es: user@gmail.com:password123"></textarea>
+    <button id="check">Testa credenziali</button>
+    <div class="results">
+        <div class="col">
+            <h3 class="working">Funzionanti</h3>
+            <ul id="working"></ul>
+        </div>
+        <div class="col">
+            <h3 class="dead">Non funzionanti</h3>
+            <ul id="dead"></ul>
+        </div>
+        <div class="col">
+            <h3 class="error">Errori</h3>
+            <ul id="error"></ul>
+        </div>
+    </div>
+</div>
+<script>
+const services = {
+    netflix: "Netflix",
+    disney: "Disney+",
+    paramount: "Paramount+",
+    hulu: "Hulu",
+    prime: "Prime Video"
+};
+let selected = "netflix";
+const container = document.getElementById("services");
+Object.entries(services).forEach(([k, v]) => {
+    const btn = document.createElement("button");
+    btn.className = "service-btn" + (k === selected ? " active" : "");
+    btn.textContent = v;
+    btn.onclick = () => {
+        selected = k;
+        document.querySelectorAll(".service-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+    };
+    container.appendChild(btn);
+});
+
+document.getElementById("check").onclick = async () => {
+    const combos = document.getElementById("combos").value;
+    if (!combos.trim()) return alert("inserisci almeno una credenziale");
+    document.getElementById("working").innerHTML = "";
+    document.getElementById("dead").innerHTML = "";
+    document.getElementById("error").innerHTML = "";
+    const btn = document.getElementById("check");
+    btn.disabled = true;
+    btn.textContent = "testing...";
+    try {
+        const res = await fetch("/check", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({service: selected, combos})
+        });
+        const data = await res.json();
+        ["working", "dead", "error"].forEach(s => {
+            const ul = document.getElementById(s);
+            (data[s] || []).forEach(r => {
+                const li = document.createElement("li");
+                li.innerHTML = `<span class="${s}">${r.email}</span> — ${r.message}`;
+                ul.appendChild(li);
+            });
+        });
+    } catch (e) {
+        alert("errore: " + e);
+    }
+    btn.disabled = false;
+    btn.textContent = "Testa credenziali";
+};
+</script>
+</body>
+</html>
