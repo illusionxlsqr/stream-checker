@@ -1,98 +1,188 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <title>Stream Checker</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #111; color: #eee; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { text-align: center; color: #e50914; }
-        .services { display: flex; gap: 10px; flex-wrap: wrap; margin: 20px 0; justify-content: center; }
-        .service-btn { padding: 12px 20px; border: none; background: #222; color: #fff; cursor: pointer; border-radius: 6px; }
-        .service-btn.active { background: #e50914; }
-        textarea { width: 100%; height: 180px; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 10px; font-family: monospace; }
-        button#check { width: 100%; padding: 14px; background: #e50914; color: #fff; border: none; font-size: 16px; cursor: pointer; margin: 10px 0; }
-        .results { margin-top: 30px; }
-        .col { display: inline-block; width: 48%; vertical-align: top; margin: 1%; }
-        .working { color: #0f0; }
-        .dead { color: #f55; }
-        .error { color: #fa0; }
-        ul { list-style: none; padding: 0; }
-        li { padding: 4px 0; border-bottom: 1px solid #333; font-size: 14px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>StreamVault</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #000;
+  color: #fff;
+  min-height: 100vh;
+  background-image: 
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(229,9,20,0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0,100,255,0.08), transparent);
+}
+.container { max-width: 520px; margin: 0 auto; padding: 20px; }
+.header { text-align: center; padding: 32px 0 20px; }
+.logo {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #fff 0%, #e50914 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.tag { font-size: 13px; color: #666; margin-top: 4px; }
+.services {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 8px 0 20px;
+  scrollbar-width: none;
+}
+.services::-webkit-scrollbar { display: none; }
+.svc {
+  flex: 0 0 auto;
+  min-width: 88px;
+  padding: 14px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-size: 12px;
+  font-weight: 500;
+  color: #aaa;
+}
+.svc.active {
+  background: rgba(229,9,20,0.12);
+  border-color: #e50914;
+  color: #fff;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(229,9,20,0.2);
+}
+.box {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(12px);
+}
+textarea {
+  width: 100%;
+  height: 160px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+}
+textarea::placeholder { color: #444; }
+.btn {
+  width: 100%;
+  height: 52px;
+  background: linear-gradient(135deg, #e50914, #c11119);
+  border: none;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(229,9,20,0.3);
+  transition: transform 0.15s;
+}
+.btn:active { transform: scale(0.98); }
+.results { margin-top: 20px; }
+.col { margin-bottom: 16px; }
+.col h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.working h3 { color: #22c55e; }
+.dead h3 { color: #ef4444; }
+.error h3 { color: #f59e0b; }
+ul { list-style: none; }
+li {
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.note { font-size: 11px; color: #555; text-align: center; margin-top: 16px; }
+</style>
 </head>
 <body>
 <div class="container">
-    <h1>Stream Checker</h1>
-    <div class="services" id="services"></div>
-    <textarea id="combos" placeholder="email:password&#10;uno per riga&#10;es: user@gmail.com:password123"></textarea>
-    <button id="check">Testa credenziali</button>
-    <div class="results">
-        <div class="col">
-            <h3 class="working">Funzionanti</h3>
-            <ul id="working"></ul>
-        </div>
-        <div class="col">
-            <h3 class="dead">Non funzionanti</h3>
-            <ul id="dead"></ul>
-        </div>
-        <div class="col">
-            <h3 class="error">Errori</h3>
-            <ul id="error"></ul>
-        </div>
-    </div>
+  <div class="header">
+    <div class="logo">StreamVault</div>
+    <div class="tag">bulk credential checker</div>
+  </div>
+  <div class="services" id="services"></div>
+  <div class="box">
+    <textarea id="combos" placeholder="Incolla qui le credenziali&#10;email:pass&#10;o righe lunghe tipo:&#10;user@mail.com:pass123 | STATUS = ACTIVE | ..."></textarea>
+  </div>
+  <button class="btn" id="check">Controlla</button>
+  <div class="results">
+    <div class="col working"><h3>Funzionanti</h3><ul id="working"></ul></div>
+    <div class="col dead"><h3>Non funzionanti</h3><ul id="dead"></ul></div>
+    <div class="col error"><h3>Errori</h3><ul id="error"></ul></div>
+  </div>
+  <div class="note">Estrae automaticamente email:password anche da dump lunghi</div>
 </div>
 <script>
-const services = {
-    netflix: "Netflix",
-    disney: "Disney+",
-    paramount: "Paramount+",
-    hulu: "Hulu",
-    prime: "Prime Video"
-};
-let selected = "netflix";
-const container = document.getElementById("services");
-Object.entries(services).forEach(([k, v]) => {
-    const btn = document.createElement("button");
-    btn.className = "service-btn" + (k === selected ? " active" : "");
-    btn.textContent = v;
-    btn.onclick = () => {
-        selected = k;
-        document.querySelectorAll(".service-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-    };
-    container.appendChild(btn);
+const services = [
+  {id:'netflix', name:'Netflix'},
+  {id:'disney', name:'Disney+'},
+  {id:'paramount', name:'Paramount+'},
+  {id:'hulu', name:'Hulu'},
+  {id:'prime', name:'Prime'}
+];
+let selected = 'netflix';
+const cont = document.getElementById('services');
+services.forEach(s => {
+  const el = document.createElement('div');
+  el.className = 'svc' + (s.id===selected?' active':'');
+  el.textContent = s.name;
+  el.onclick = () => {
+    selected = s.id;
+    document.querySelectorAll('.svc').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+  };
+  cont.appendChild(el);
 });
-
-document.getElementById("check").onclick = async () => {
-    const combos = document.getElementById("combos").value;
-    if (!combos.trim()) return alert("inserisci almeno una credenziale");
-    document.getElementById("working").innerHTML = "";
-    document.getElementById("dead").innerHTML = "";
-    document.getElementById("error").innerHTML = "";
-    const btn = document.getElementById("check");
-    btn.disabled = true;
-    btn.textContent = "testing...";
-    try {
-        const res = await fetch("/check", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({service: selected, combos})
-        });
-        const data = await res.json();
-        ["working", "dead", "error"].forEach(s => {
-            const ul = document.getElementById(s);
-            (data[s] || []).forEach(r => {
-                const li = document.createElement("li");
-                li.innerHTML = `<span class="${s}">${r.email}</span> — ${r.message}`;
-                ul.appendChild(li);
-            });
-        });
-    } catch (e) {
-        alert("errore: " + e);
-    }
-    btn.disabled = false;
-    btn.textContent = "Testa credenziali";
+document.getElementById('check').onclick = async () => {
+  const raw = document.getElementById('combos').value.trim();
+  if (!raw) return;
+  document.getElementById('working').innerHTML = '';
+  document.getElementById('dead').innerHTML = '';
+  document.getElementById('error').innerHTML = '';
+  const btn = document.getElementById('check');
+  btn.disabled = true;
+  btn.textContent = 'Controllo...';
+  try {
+    const res = await fetch('/check', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({service: selected, combos: raw})
+    });
+    const data = await res.json();
+    ['working','dead','error'].forEach(k => {
+      const ul = document.getElementById(k);
+      (data[k]||[]).forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = r.email + ' — ' + r.message;
+        ul.appendChild(li);
+      });
+    });
+  } catch(e) {
+    alert('Errore di connessione');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Controlla';
 };
 </script>
 </body>
